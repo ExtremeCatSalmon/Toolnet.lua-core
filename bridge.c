@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdbool.h>
 
 lua_State *L;
 
@@ -108,10 +109,24 @@ static int push_val(Vals *vals, Val *v) {
     return 0;
 }
 
+static int push_table_val(Vals *vals, Table *t) {
+    Val val = {0};
+    val.type = TTABLE;
+    val.as.table = *t;
+    return push_val(vals,&val);
+}
+
 static int push_string_val(Vals *vals, const char* s) {
     Val val = {0};
     val.type = TSTRING;
     val.as.string = strdup(s);
+    return push_val(vals,&val);
+}
+
+static int push_int_val(Vals *vals, int a) {
+    Val val = {0};
+    val.type = TNUMBER;
+    val.as.number = a;
     return push_val(vals,&val);
 }
 
@@ -215,9 +230,13 @@ Val *lua_vm_dostring(const char *code)
         .keys={0},
         .values={0}
     };
+    Table ret_table = {
+        .keys={0},
+        .values={0}
+    };
 
     // TODO: 오류 처리
-    luaL_dostring(L, code);
+    bool ok = !luaL_dostring(L, code);
     int top = lua_gettop(L);
 
     if (top > base) {
@@ -227,28 +246,62 @@ Val *lua_vm_dostring(const char *code)
             key.type = TNUMBER;
             key.as.number = cnt++;
             Val val = lua_to_val(L, i);
-            push_val(&ret->as.table.keys,&key);
-            push_val(&ret->as.table.values,&val);
+            push_val(&ret_table.keys,&key);
+            push_val(&ret_table.values,&val);
         }
     }
 
-error:
+    push_string_val(&ret->as.table.keys,"ok");
+    push_int_val(&ret->as.table.values,ok);
+    push_string_val(&ret->as.table.keys,"ret");
+    push_table_val(&ret->as.table.values, &ret_table);
     lua_settop(L, base);
     return ret;
 }
-void lua_vm_dostring_free(Val *ret) {
-    if (ret == NULL) {
+static void free_vals(Vals *val) {
+    if (val == NULL) return;
+
+    free(val->data);
+    val->data=NULL;
+    val->cap=0;
+    val->cnt=0;
+}
+static void free_table(Table *table) {
+    if (table == NULL) return;
+
+    free_vals(&table->keys);
+    free_vals(&table->values);
+    free(table);
+}
+static void free_val_contents(Val *v) {
+    if (!v) return;
+
+    switch (v->type) {
+    case TSTRING:
+        free(v->as.string);
+        v->as.string = NULL;
+        break;
+
+    case TTABLE:
+        free_table(&v->as.table);
+        break;
+
+    case TFUNCTION:
+        luaL_unref(L, LUA_REGISTRYINDEX, v->as.function);
+        v->as.function = LUA_NOREF;
+        break;
+
+    default:
+        break;
+    }
+}
+void lua_vm_dostring_free(Val *val) {
+    if (val == NULL) {
         return;
     }
 
-    // for (int i = 0; ret[i] != NULL; ++i) {
-    //     free(ret[i]);
-    // }
-
-    if (ret->type == TSTRING || ret->type == TUNSUPPORTED) {
-        free(ret->as.string);
-    }
-    free(ret);
+    free_val_contents(val);
+    free(val);
 }
 
 int lua_vm_close()

@@ -28,6 +28,7 @@ emcc bridge.c ./liblua.a -O2 ^
   -sMODULARIZE=1 ^
   -sEXPORT_ES6=1 ^
   -sENVIRONMENT=web ^
+  -O2 ^
   -sEXPORTED_FUNCTIONS="[%EXPORTED_FUNCTIONS%]" ^
   -sEXPORTED_RUNTIME_METHODS=["ccall","cwrap","HEAPU32","HEAPU8","UTF8ToString","getValue"] ^
   -o lua.vm.js
